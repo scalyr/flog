@@ -36,12 +36,19 @@ func Generate(option *Option) error {
 	}
 
 	if option.Forever {
-		for {
-			time.Sleep(delay)
-			log := NewLog(option.Format, created)
-			writer.Write([]byte(log + "\n"))
-			created = created.Add(interval)
-		}
+                writeLimiter := CreateWriteLimiter(option.MBsRate, interval, delay, option.ReportTo)
+                for {
+                  bytesToWrite, logLineTime := writeLimiter.BlockUntilCanWriteBytes()
+                  bytesWritten := int64(0)
+                  linesWritten := 0
+                  for bytesWritten < bytesToWrite {
+		    log := NewLog(option.Format, logLineTime)
+		    writer.Write([]byte(log + "\n"))
+                    bytesWritten += int64(len(log))
+                    linesWritten += 1
+                  }
+                  writeLimiter.ReportBytesWritten(bytesWritten, linesWritten, logLineTime)
+                }
 	}
 
 	if option.Bytes == 0 {

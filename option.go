@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -29,6 +30,8 @@ Options:
                            with "byte" option, the logs will be split whenever the maximum size in bytes is reached.
   -w, --overwrite          overwrite the existing log files.
   -l, --loop               loop output forever until killed.
+  -m, --mbs-rate float     the target log generation rate, MB per second. This is only used with --loop.
+  -r, --report-to string   the file to write reporting information to. This is only used with --loop.
 `
 
 var validFormats = []string{"apache_common", "apache_combined", "apache_error", "rfc3164", "rfc5424", "common_log", "json"}
@@ -46,6 +49,8 @@ type Option struct {
 	SplitBy   int
 	Overwrite bool
 	Forever   bool
+	MBsRate   float64
+	ReportTo  string
 }
 
 func init() {
@@ -77,6 +82,8 @@ func defaultOptions() *Option {
 		SplitBy:   0,
 		Overwrite: false,
 		Forever:   false,
+		MBsRate:   math.Inf(0),
+		ReportTo:  "",
 	}
 }
 
@@ -128,6 +135,14 @@ func ParseDelay(delay float64) (float64, error) {
 	return delay, nil
 }
 
+// ParseMBsRate validates the MB/s rate
+func ParseMBsRate(mbsRate float64) (float64, error) {
+	if mbsRate <= 0 {
+		return 0.0, errors.New("MBs rate must be greater than zero")
+	}
+	return mbsRate, nil
+}
+
 // ParseSplitBy validates the given split-by
 func ParseSplitBy(splitBy int) (int, error) {
 	if splitBy < 0 {
@@ -154,7 +169,9 @@ func ParseOptions() *Option {
 	splitBy := pflag.IntP("split", "p", opts.SplitBy, "Set the maximum number of lines or maximum size in bytes of a log file")
 	overwrite := pflag.BoolP("overwrite", "w", false, "Overwrite the existing log files")
 	forever := pflag.BoolP("loop", "l", false, "Loop output forever until killed")
-
+	mbsRate := pflag.Float64P("mbs-rate", "m", opts.MBsRate, "The target log generation rate, MB per second")
+	reportTo := pflag.StringP("report-to", "r", opts.ReportTo, "Report log file")
+        
 	pflag.Parse()
 
 	if *help {
@@ -183,11 +200,15 @@ func ParseOptions() *Option {
 	if opts.Delay, err = ParseDelay(*delay); err != nil {
 		errorExit(err)
 	}
+	if opts.MBsRate, err = ParseMBsRate(*mbsRate); err != nil {
+		errorExit(err)
+	}
 	if opts.SplitBy, err = ParseSplitBy(*splitBy); err != nil {
 		errorExit(err)
 	}
 	opts.Output = *output
 	opts.Overwrite = *overwrite
 	opts.Forever = *forever
+	opts.ReportTo = *reportTo
 	return opts
 }

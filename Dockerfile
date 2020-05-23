@@ -13,4 +13,6 @@ RUN go build -o /bin/flog
 
 FROM scratch
 COPY --from=0 /bin/flog /bin/flog
+# Create temporary directory in case the `--report-to` option is used
+COPY --from=0 /tmp /tmp
 ENTRYPOINT ["flog"]
